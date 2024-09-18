@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Puzzle Insanity</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #111;
+            color: #ddd;
+            transition: background-color 0.5s, color 0.5s;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            height: 100vh;
+            margin: 0;
+        }
+        #game-container {
+            max-width: 800px;
+            padding: 20px;
+            border: 1px solid #555;
+            background-color: #222;
+            position: relative;
+            width: 70%;
+        }
+        #game-output {
+            height: 300px;
+            overflow-y: auto;
+            margin-bottom: 10px;
+            background-color: #333;
+            padding: 10px;
+            border: 1px solid #444;
+        }
+        #game-input {
+            width: calc(100% - 22px);
+            padding: 10px;
+            border: 1px solid #444;
+            background-color: #555;
+            color: white;
+        }
+        #status-bar {
+            display: flex;
+            justify-content: space-between;
+            background-color: #444;
+            padding: 10px;
+            border-top: 2px solid #555;
+        }
+        #health-bar, #sanity-bar, #rooms-traveled-bar {
+            width: 30%;
+            padding: 10px;
+            background-color: #333;
+            color: white;
+            border: 1px solid #555;
+        }
+        #inventory {
+            width: 100%;
+            padding: 10px;
+            background-color: #333;
+            color: white;
+            border: 1px solid #555;
+            margin-top: 10px;
+        }
+        #commands {
+            position: absolute;
+            right: -250px;
+            top: 20px;
+            width: 230px;
+            background-color: #333;
+            padding: 10px;
+            border: 1px solid #444;
+            color: white;
+            font-size: 14px;
+        }
+        #commands h3 {
+            margin-top: 0;
+        }
+        #commands ul {
+            padding-left: 20px;
+            list-style-type: none;
+        }
+        #commands li {
+            margin-bottom: 5px;
+        }
+        #restart-button {
+            display: none;
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #555;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        #restart-button:hover {
+            background-color: #666;
+        }
+        #settings {
+            display: none;
+        }
+        #color-selection {
+            display: none;
+            margin-top: 10px;
+        }
+        #color-preview {
+            margin-top: 10px;
+            padding: 10px;
+            border: 1px solid #555;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="settings">
+            <h2>Settings</h2>
+            <p>Type <strong>change color [color]</strong> to change the text color.</p>
+            <p>Type <strong>start</strong> to return to the game.</p>
+            <button id="color-back-button">Back to Color Selection</button>
+        </div>
+        <div id="color-selection">
+            <h2>Choose a Text Color</h2>
+            <p>Type <strong>blue</strong>, <strong>green</strong>, <strong>yellow</strong>, or <strong>red</strong> to select a color.</p>
+            <div id="color-preview">This is the text preview.</div>
+            <button id="color-confirm-button">Confirm</button>
+            <button id="color-back-to-settings-button">Back to Settings</button>
+        </div>
+        <div id="game-container-content">
+            <div id="game-output"></div>
+            <input type="text" id="game-input" placeholder="Type a command..." autofocus>
+            <div id="status-bar">
+                <div id="health-bar">Health: 100</div>
+                <div id="sanity-bar">Sanity: 100</div>
+                <div id="rooms-traveled-bar">Rooms Traveled: 0</div>
+            </div>
+            <div id="inventory">Inventory: None</div>
+            <button id="restart-button" onclick="restartGame()">Try Again?</button>
+            <div id="commands">
+                <h3>Commands</h3>
+                <ul>
+                    <li><strong>look</strong> - Examine your surroundings</li>
+                    <li><strong>grab [item]</strong> - Pick up an item</li>
+                    <li><strong>inventory</strong> - Show your inventory</li>
+                    <li><strong>fight</strong> - Engage in combat</li>
+                    <li><strong>avoid</strong> - Avoid combat and lose sanity</li>
+                    <li><strong>move [direction]</strong> - Move to a different room</li>
+                    <li><strong>sleep</strong> - Rest and regain sanity</li>
+                    <li><strong>read</strong> - Read a book to regain sanity</li>
+                    <li><strong>settings</strong> - Change text color</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const output = document.getElementById('game-output');
+        const input = document.getElementById('game-input');
+        const healthBar = document.getElementById('health-bar');
+        const sanityBar = document.getElementById('sanity-bar');
+        const inventoryDisplay = document.getElementById('inventory');
+        const roomsTraveledBar = document.getElementById('rooms-traveled-bar');
+        const restartButton = document.getElementById('restart-button');
+        const settings = document.getElementById('settings');
+        const colorSelection = document.getElementById('color-selection');
+        const colorPreview = document.getElementById('color-preview');
+        const colorConfirmButton = document.getElementById('color-confirm-button');
+        const colorBackButton = document.getElementById('color-back-button');
+        const colorBackToSettingsButton = document.getElementById('color-back-to-settings-button');
+        const gameContainerContent = document.getElementById('game-container-content');
+
+        let room = 1;
+        let health = 100;
+        let sanity = 100;
+        let inventory = [];
+        let roomsTraveled = 0;
+        let gameOver = false;
+        let currentMode = 'intro';
+        let selectedColor = '#ddd';
+
+        // Define rooms with specific item details and enemy encounters
+        const rooms = {
+            1: { description: "You wake up in a cold, dark room. The walls are damp. On the floor, you see a crumpled note.", items: ["note"], enemies: null, exits: { north: 2 } },
+            2: { description: "A narrow hallway stretches before you. To the north, the hallway darkens. To the east, you see a door. A strange creature is lurking.", items: [], enemies: "strange creature", exits: { north: 3, east: 5, south: 1 } },
+            3: { description: "A large, decrepit chamber. A rusty lantern swings from the ceiling. There’s a door to the west and a stairwell leading down. You see a lantern on a shelf.", items: ["lantern"], enemies: null, exits: { west: 4, south: 2, down: 6 } },
+            4: { description: "A small room with dusty bookshelves. On a shelf, you see an old book. The room feels stifling.", items: ["book"], enemies: null, exits: { east: 3 } },
+            5: { description: "An unsettling room with an eerie silence. A key lies in the middle of the floor, surrounded by faint scratching sounds.", items: ["key"], enemies: null, exits: { west: 2 } },
+            6: { description: "The basement is cold and damp. Distant whispers echo. A shadowy figure stands at the far end of the room.", items: [], enemies: "shadowy figure", exits: { up: 3 } },
+            30: { description: "You find yourself in a large, ominous room. The air is thick with dust. There’s a final door in the corner that might lead to freedom. On a pedestal, you see a glowing artifact.", items: ["artifact"], enemies: null, exits: {} }
+        };
+
+        // Define attack options
+        const attacks = {
+            punch: { damage: 10, text: 'You throw a punch!' },
+            kick: { damage: 15, text: 'You kick the creature!' },
+            slash: { damage: 20, text: 'You slash with your weapon!' }
+        };
+
+        // Define creature stats
+        const creatures = {
+            'strange creature': { health: 50, attackDamage: 10 },
+            'shadowy figure': { health: 70, attackDamage: 15 }
+        };
+
+        function changeTextColor(color) {
+            document.body.style.color = color;
+            selectedColor = color;
+        }
+
+        function showTextColorMenu() {
+            settings.style.display = 'none';
+            colorSelection.style.display = 'block';
+            colorPreview.style.color = selectedColor;
+            colorPreview.textContent = 'This is the text preview.';
+        }
+
+        function startGame() {
+            settings.style.display = 'none';
+            colorSelection.style.display = 'none';
+            gameContainerContent.style.display = 'block';
+            showRoomDescription();
+        }
+
+        function showRoomDescription() {
+            const roomData = rooms[room];
+            output.innerHTML = `
+                <p>${roomData.description}</p>
+                <p>Items on the floor: ${roomData.items.join(', ') || 'None'}</p>
+            `;
+        }
+
+        function handleCommand(command) {
+            if (command.startsWith('look')) {
+                output.innerHTML += `<p>You look around and see: ${rooms[room].description}</p>`;
+                output.innerHTML += '<p>Before you start, would you like to change the text color? (yes/no)</p>';
+                currentMode = 'color-prompt';
+            } else if (currentMode === 'color-prompt') {
+                if (command === 'yes') {
+                    showTextColorMenu();
+                    currentMode = 'color-selection';
+                } else if (command === 'no') {
+                    startGame();
+                }
+            } else if (currentMode === 'color-selection') {
+                if (['blue', 'green', 'yellow', 'red'].includes(command)) {
+                    colorPreview.style.color = command;
+                    output.innerHTML += `<p>This is the text preview. Would you like to change it? (yes/no)</p>`;
+                    currentMode = 'color-confirm';
+                } else if (command === 'back') {
+                    settings.style.display = 'block';
+                    colorSelection.style.display = 'none';
+                }
+            } else if (currentMode === 'color-confirm') {
+                if (command === 'yes') {
+                    showTextColorMenu();
+                } else if (command === 'no') {
+                    changeTextColor(colorPreview.style.color);
+                    startGame();
+                }
+            } else {
+                // Handle game commands
+                if (command.startsWith('move')) {
+                    const direction = command.split(' ')[1];
+                    const exits = rooms[room].exits;
+                    if (exits[direction]) {
+                        room = exits[direction];
+                        roomsTraveled++;
+                        output.innerHTML += `<p>You move ${direction} to room ${room}.</p>`;
+                        showRoomDescription();
+                        sanity -= 1;
+                    } else {
+                        output.innerHTML += `<p>You can't move ${direction} from here.</p>`;
+                    }
+                } else if (command.startsWith('grab')) {
+                    const item = command.split(' ')[1];
+                    if (rooms[room].items.includes(item)) {
+                        inventory.push(item);
+                        rooms[room].items = rooms[room].items.filter(i => i !== item);
+                        output.innerHTML += `<p>You picked up a ${item}.</p>`;
+                        inventoryDisplay.innerHTML = `Inventory: ${inventory.join(', ') || 'None'}`;
+                    } else {
+                        output.innerHTML += `<p>There's no ${item} here.</p>`;
+                    }
+                } else if (command === 'inventory') {
+                    output.innerHTML += `<p>Inventory: ${inventory.join(', ') || 'None'}</p>`;
+                } else if (command.startsWith('fight')) {
+                    const enemy = rooms[room].enemies;
+                    if (enemy) {
+                        startFight(enemy);
+                    } else {
+                        output.innerHTML += `<p>There's no enemy here to fight.</p>`;
+                    }
+                } else if (command === 'avoid') {
+                    if (rooms[room].enemies) {
+                        sanity -= 1;
+                        output.innerHTML += `<p>You avoid the fight but lose 1 sanity.</p>`;
+                    } else {
+                        output.innerHTML += `<p>There's no enemy here to avoid.</p>`;
+                    }
+                } else if (command === 'sleep') {
+                    sanity = Math.min(100, sanity + 10);
+                    output.innerHTML += `<p>You sleep on the floor and regain some sanity.</p>`;
+                } else if (command === 'read') {
+                    if (rooms[room].items.includes('book')) {
+                        sanity = Math.min(100, sanity + 20);
+                        output.innerHTML += `<p>You read the book and regain some sanity.</p>`;
+                    } else {
+                        output.innerHTML += `<p>There's no book here to read.</p>`;
+                    }
+                } else {
+                    output.innerHTML += `<p>Unknown command: ${command}</p>`;
+                }
+                updateStatus();
+            }
+        }
+
+        function startFight(enemy) {
+            const creature = creatures[enemy];
+            let fightResult = '';
+            const attackChoice = prompt('Choose your attack: punch, kick, slash').toLowerCase();
+            if (attacks[attackChoice]) {
+                const attack = attacks[attackChoice];
+                creature.health -= attack.damage;
+                fightResult += `<p>${attack.text} The ${enemy} now has ${creature.health} health left.</p>`;
+                if (creature.health > 0) {
+                    const damage = creature.attackDamage;
+                    health -= damage;
+                    fightResult += `<p>The ${enemy} attacks back and you lose ${damage} health. You now have ${health} health left.</p>`;
+                    if (health <= 0) {
+                        output.innerHTML = `<p>You lost! Try Again?</p>`;
+                        restartButton.style.display = 'block';
+                        gameOver = true;
+                        return;
+                    }
+                } else {
+                    fightResult += `<p>You defeated the ${enemy}!</p>`;
+                    rooms[room].enemies = null;
+                }
+            } else {
+                fightResult += `<p>Invalid attack choice.</p>`;
+            }
+            output.innerHTML += fightResult;
+            updateStatus();
+        }
+
+        function updateStatus() {
+            healthBar.innerHTML = `Health: ${health}`;
+            sanityBar.innerHTML = `Sanity: ${sanity}`;
+            roomsTraveledBar.innerHTML = `Rooms Traveled: ${roomsTraveled}`;
+        }
+
+        function restartGame() {
+            health = 100;
+            sanity = 100;
+            inventory = [];
+            roomsTraveled = 0;
+            room = 1;
+            gameOver = false;
+            restartButton.style.display = 'none';
+            updateStatus();
+            showRoomDescription();
+        }
+
+        input.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                const command = input.value.trim().toLowerCase();
+                input.value = '';
+                if (!gameOver) {
+                    handleCommand(command);
+                }
+            }
+        });
+
+        output.innerHTML = '<p>Type <strong>look</strong> to start.</p>';
+    </script>
+</body>
+</html>
